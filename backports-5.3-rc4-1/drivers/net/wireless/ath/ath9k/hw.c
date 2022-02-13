@@ -67,11 +67,23 @@ static void ath9k_hw_set_clockrate(struct ath_hw *ah)
 	common->clockrate = clockrate;
 }
 
+/** This is the clockrate of the wireless chip (not the chip running the firmware for ath9k_htc) */
 static u32 ath9k_hw_mac_to_clks(struct ath_hw *ah, u32 usecs)
 {
 	struct ath_common *common = ath9k_hw_common(ah);
 
 	return usecs * common->clockrate;
+}
+
+/** This is the clockrate of the wireless chip (not the chip running the firmware for ath9k_htc) */
+static u32 ath9k_hw_mac_to_usecs(struct ath_hw *ah, u32 clks)
+{
+	struct ath_common *common = ath9k_hw_common(ah);
+
+	if (common->clockrate == 0)
+		return 0xFFFFFFFF;
+
+	return clks / common->clockrate;
 }
 
 bool ath9k_hw_wait(struct ath_hw *ah, u32 reg, u32 mask, u32 val, u32 timeout)
