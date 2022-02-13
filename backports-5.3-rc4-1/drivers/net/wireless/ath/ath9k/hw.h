@@ -1111,6 +1111,18 @@ bool ath9k_hw_check_alive(struct ath_hw *ah);
 
 bool ath9k_hw_setpower(struct ath_hw *ah, enum ath9k_power_mode mode);
 
+void ath9k_hw_set_sifs_time(struct ath_hw *ah, u32 us);
+void ath9k_hw_setslottime(struct ath_hw *ah, u32 us);
+void ath9k_hw_set_ack_timeout(struct ath_hw *ah, u32 us);
+void ath9k_hw_set_cts_timeout(struct ath_hw *ah, u32 us);
+void ath9k_hw_set_eifs_timeout(struct ath_hw *ah, u32 us);
+
+u32 ath9k_hw_get_sifs_time(struct ath_hw *ah);
+u32 ath9k_hw_getslottime(struct ath_hw *ah);
+u32 ath9k_hw_get_ack_timeout(struct ath_hw *ah);
+u32 ath9k_hw_get_cts_timeout(struct ath_hw *ah);
+u32 ath9k_hw_get_eifs_timeout(struct ath_hw *ah);
+
 /* Generic hw timer primitives */
 struct ath_gen_timer *ath_gen_timer_alloc(struct ath_hw *ah,
 					  void (*trigger)(void *),

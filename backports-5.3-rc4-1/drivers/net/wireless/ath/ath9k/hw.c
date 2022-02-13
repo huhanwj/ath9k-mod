@@ -1043,6 +1043,7 @@ void ath9k_hw_set_ack_timeout(struct ath_hw *ah, u32 us)
 	//val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_ACK));
 	REG_RMW_FIELD(ah, AR_TIME_OUT, AR_TIME_OUT_ACK, val);
 }
+EXPORT_SYMBOL(ath9k_hw_set_ack_timeout);
 
 void ath9k_hw_set_cts_timeout(struct ath_hw *ah, u32 us)
 {
@@ -1050,6 +1051,50 @@ void ath9k_hw_set_cts_timeout(struct ath_hw *ah, u32 us)
 	//val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_CTS));
 	REG_RMW_FIELD(ah, AR_TIME_OUT, AR_TIME_OUT_CTS, val);
 }
+EXPORT_SYMBOL(ath9k_hw_set_cts_timeout);
+
+void ath9k_hw_set_eifs_timeout(struct ath_hw *ah, u32 us)
+{
+	u32 val = ath9k_hw_mac_to_clks(ah, us);
+	val &= AR_D_GBL_IFS_EIFS;
+	REG_WRITE(ah, AR_D_GBL_IFS_EIFS, val);
+}
+EXPORT_SYMBOL(ath9k_hw_set_eifs_timeout);
+
+u32 ath9k_hw_get_sifs_time(struct ath_hw *ah)
+{
+	u32 val = REG_READ(ah, AR_D_GBL_IFS_SIFS) & AR_D_GBL_IFS_SIFS_M;
+	return ath9k_hw_mac_to_usecs(ah, val) + 2;
+}
+EXPORT_SYMBOL(ath9k_hw_get_sifs_time);
+
+u32 ath9k_hw_getslottime(struct ath_hw *ah)
+{
+	u32 val = REG_READ(ah, AR_D_GBL_IFS_SLOT) & AR_D_GBL_IFS_SLOT_M;
+	return ath9k_hw_mac_to_usecs(ah, val);
+}
+EXPORT_SYMBOL(ath9k_hw_getslottime);
+
+u32 ath9k_hw_get_ack_timeout(struct ath_hw *ah)
+{
+	u32 val = MS(REG_READ(ah, AR_TIME_OUT), AR_TIME_OUT_ACK);
+	return ath9k_hw_mac_to_usecs(ah, val);
+}
+EXPORT_SYMBOL(ath9k_hw_get_ack_timeout);
+
+u32 ath9k_hw_get_cts_timeout(struct ath_hw *ah)
+{
+	u32 val = MS(REG_READ(ah, AR_TIME_OUT), AR_TIME_OUT_CTS);
+	return ath9k_hw_mac_to_usecs(ah, val);
+}
+EXPORT_SYMBOL(ath9k_hw_get_cts_timeout);
+
+u32 ath9k_hw_get_eifs_timeout(struct ath_hw *ah)
+{
+	u32 val = REG_READ(ah, AR_D_GBL_IFS_EIFS) & AR_D_GBL_IFS_EIFS_M;
+	return ath9k_hw_mac_to_usecs(ah, val);
+}
+EXPORT_SYMBOL(ath9k_hw_get_eifs_timeout);
 
 static bool ath9k_hw_set_global_txtimeout(struct ath_hw *ah, u32 tu)
 {
