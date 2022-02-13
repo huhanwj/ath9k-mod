@@ -113,6 +113,9 @@ enum wmi_cmd_id {
 	WMI_RX_STATS_CMDID,
 	WMI_BITRATE_MASK_CMDID,
 	WMI_REG_RMW_CMDID,
+
+	/* Custom commands added */
+	WMI_DEBUGMSG_CMDID = 0x0080,
 };
 
 enum wmi_event_id {
@@ -145,6 +148,16 @@ struct ath9k_htc_tx_event {
 	struct list_head list;
 };
 
+struct wmi_debugmsg_cmd {
+	__be16 offset;
+} __packed;
+
+struct wmi_debugmsg_resp {
+	/** Length of zero signifies that no more data is available */
+	u8 length;
+	/** Debug message(s) **/
+	u8 buffer[40];
+} __packed;
 struct wmi {
 	struct ath9k_htc_priv *drv_priv;
 	struct htc_target *htc;
