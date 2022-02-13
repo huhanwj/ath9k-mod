@@ -1021,31 +1021,33 @@ static void ath9k_hw_init_interrupt_masks(struct ath_hw *ah,
 	}
 }
 
-static void ath9k_hw_set_sifs_time(struct ath_hw *ah, u32 us)
+void ath9k_hw_set_sifs_time(struct ath_hw *ah, u32 us)
 {
 	u32 val = ath9k_hw_mac_to_clks(ah, us - 2);
-	val = min(val, (u32) 0xFFFF);
+	val &= AR_D_GBL_IFS_SIFS_M;
 	REG_WRITE(ah, AR_D_GBL_IFS_SIFS, val);
 }
+EXPORT_SYMBOL(ath9k_hw_set_sifs_time);
 
 void ath9k_hw_setslottime(struct ath_hw *ah, u32 us)
 {
 	u32 val = ath9k_hw_mac_to_clks(ah, us);
-	val = min(val, (u32) 0xFFFF);
+	val &= AR_D_GBL_IFS_SLOT_M;
 	REG_WRITE(ah, AR_D_GBL_IFS_SLOT, val);
 }
+EXPORT_SYMBOL(ath9k_hw_setslottime);
 
 void ath9k_hw_set_ack_timeout(struct ath_hw *ah, u32 us)
 {
 	u32 val = ath9k_hw_mac_to_clks(ah, us);
-	val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_ACK));
+	//val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_ACK));
 	REG_RMW_FIELD(ah, AR_TIME_OUT, AR_TIME_OUT_ACK, val);
 }
 
 void ath9k_hw_set_cts_timeout(struct ath_hw *ah, u32 us)
 {
 	u32 val = ath9k_hw_mac_to_clks(ah, us);
-	val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_CTS));
+	//val = min(val, (u32) MS(0xFFFFFFFF, AR_TIME_OUT_CTS));
 	REG_RMW_FIELD(ah, AR_TIME_OUT, AR_TIME_OUT_CTS, val);
 }
 
