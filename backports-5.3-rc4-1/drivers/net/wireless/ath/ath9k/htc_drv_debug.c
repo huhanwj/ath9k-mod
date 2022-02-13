@@ -15,6 +15,25 @@
  */
 
 #include "htc.h"
+#include "hw.h"
+
+struct reg_ops registers[] = {
+	// Backoff parameters
+	{"ifs_cwmin_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMIN,
+		"Backoff behaviour (queue 0): CW_MIN is the minimum number of time slots to wait."},
+	{"ifs_cwmax_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMAX,
+		"Backoff behaviour (queue 0): CW_MAX is the maximum number of time slots to wait."},
+	{"ifs_aifs_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_AIFS,
+		"AIFS (in number of aSlotTime's) for queue 0."},
+	// Disable backoff
+	{"ifs_ignore_backoff",		AR_D_GBL_IFS_MISC,	AR_D_GBL_IFS_MISC_IGNORE_BACKOFF,
+		"Ignore backoff (perhaps you also want to disable waiting for ACKs - see inject_noack)."},
+	// Virtual and physical carrier sense
+	{"ignore_virt_cs",		AR_DIAG_SW,		AR_DIAG_IGNORE_VIRT_CS,
+		"Disables virtual carrier (cts/rts) sense when set."},
+	{"force_channel_idle",		AR_DIAG_SW,		AR_DIAG_FORCE_CH_IDLE_HIGH,
+		"Disables physical carrier sense (air clear) when set."},
+};
 
 static ssize_t read_file_tgt_int_stats(struct file *file, char __user *user_buf,
 				       size_t count, loff_t *ppos)
@@ -398,6 +417,130 @@ static const struct file_operations fops_debug = {
 	.llseek = default_llseek,
 };
 
+static ssize_t read_file_reg_ops(struct file *file, char __user *user_buf,
+				 size_t count, loff_t *ppos)
+{
+	struct reg_ops_instance *instance = file->private_data;
+	struct ath9k_htc_priv *priv = instance->owner;
+	struct reg_ops *regops = instance->regops;
+	char buf[512];
+	unsigned int len;
+	unsigned int regval, mask;
+
+	ath9k_htc_ps_wakeup(priv);
+	regval = REG_READ(priv->ah, regops->address);
+	ath9k_htc_ps_restore(priv);
+
+	// apply mask, and shift according to mask
+	regval &= regops->mask;
+	mask = regops->mask;
+	while ( (mask & 1) == 0) {
+		mask >>= 1;
+		regval >>= 1;
+	}
+
+	len = snprintf(buf, sizeof(buf), "%s: %s\nValue: 0x%08X = %d (forced: %d)\n",
+					regops->name, regops->description, regval, regval,
+					!!(instance->valueset));
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static ssize_t write_file_reg_ops(struct file *file, const char __user *user_buf,
+				  size_t count, loff_t *ppos)
+{
+	struct reg_ops_instance *instance = file->private_data;
+	struct ath9k_htc_priv *priv = instance->owner;
+	struct reg_ops *regops = instance->regops;
+	unsigned long val;
+	char buf[32];
+	ssize_t len;
+	unsigned int mask, regval;
+
+	len = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, user_buf, len))
+		return -EINVAL;
+
+	buf[len] = '\0';
+	if (kstrtoul(buf, 0, &val))
+		return -EINVAL;
+
+	// shift according to mask
+	mask = regops->mask;
+	while ( (mask & 1) == 0) {
+		mask >>= 1;
+		val <<= 1;
+	}
+
+	// apply mask to assure we're not overwriting anything else
+	val &= regops->mask;
+
+	ath9k_htc_ps_wakeup(priv);
+	regval = REG_READ(priv->ah, regops->address);
+	regval = (regval & ~regops->mask) | val;
+	REG_WRITE(priv->ah, regops->address, regval);
+	ath9k_htc_ps_restore(priv);
+
+	instance->valueset = 1;
+	instance->value = val;
+
+	return count;
+}
+
+static const struct file_operations fops_reg_ops = {
+	.read = read_file_reg_ops,
+	.write = write_file_reg_ops,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t read_file_dmesg(struct file *file, char __user *user_buf,
+			       size_t count, loff_t *ppos)
+{
+	struct ath9k_htc_priv *priv = file->private_data;
+	struct wmi_debugmsg_cmd cmd;
+	struct wmi_debugmsg_resp cmd_rsp;
+	/** ppos is the amount of data already read (maintained by caller) */
+	int offset = *ppos;
+	int ret;
+
+	/** Note: don't need to wake the WiFi MAC chip to get debug messages! */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.offset = cpu_to_be16(offset);
+
+	memset(&cmd_rsp, 0, sizeof(cmd_rsp));
+	ret = ath9k_wmi_cmd(priv->wmi, WMI_DEBUGMSG_CMDID,
+			    (u8*)&cmd, sizeof(cmd),
+			    (u8*)&cmd_rsp, sizeof(cmd_rsp),
+			    HZ*2);
+	if (ret) {
+		printk("ath9k_htc %s: Something went wrong reading firmware dmesg (ret: %d, len: %d)\n",
+			__FUNCTION__, ret, cmd_rsp.length);
+		return -EIO;
+	}
+
+	// Don't overflow user_buf
+	if (count < cmd_rsp.length)
+		cmd_rsp.length = count;
+
+	// Length of zero signifies EOF
+	if (cmd_rsp.length != 0) {
+		// Returns number of bytes that could not be copied
+		if (copy_to_user(user_buf, cmd_rsp.buffer, cmd_rsp.length) != 0)
+			return -EFAULT;
+	}
+
+	*ppos += cmd_rsp.length;
+	return cmd_rsp.length; 
+}
+
+static const struct file_operations fops_dmesg = {
+	.read = read_file_dmesg,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
 /* Ethtool support for get-stats */
 #define AMKSTR(nm) #nm "_BE", #nm "_BK", #nm "_VI", #nm "_VO"
 static const char ath9k_htc_gstrings_stats[][ETH_GSTRING_LEN] = {
@@ -481,6 +624,10 @@ void ath9k_htc_get_et_stats(struct ieee80211_hw *hw,
 
 void ath9k_htc_deinit_debug(struct ath9k_htc_priv *priv)
 {
+	if (priv->debug.debugfs_phy_regs)
+		debugfs_remove(priv->debug.debugfs_phy_regs);
+	priv->debug.debugfs_phy_regs = NULL;
+
 	ath9k_cmn_spectral_deinit_debug(&priv->spec_priv);
 }
 
@@ -488,6 +635,8 @@ int ath9k_htc_init_debug(struct ath_hw *ah)
 {
 	struct ath_common *common = ath9k_hw_common(ah);
 	struct ath9k_htc_priv *priv = (struct ath9k_htc_priv *) common->priv;
+	struct reg_ops_instance *previnstance;
+	int i;
 
 	priv->debug.debugfs_phy = debugfs_create_dir(KBUILD_MODNAME,
 					     priv->hw->wiphy->debugfsdir);
@@ -516,9 +665,46 @@ int ath9k_htc_init_debug(struct ath_hw *ah)
 			    priv, &fops_queue);
 	debugfs_create_file("debug", 0600, priv->debug.debugfs_phy,
 			    priv, &fops_debug);
+	debugfs_create_file("dmesg", S_IRUSR, priv->debug.debugfs_phy,
+			    priv, &fops_dmesg);
 
 	ath9k_cmn_debug_base_eeprom(priv->debug.debugfs_phy, priv->ah);
 	ath9k_cmn_debug_modal_eeprom(priv->debug.debugfs_phy, priv->ah);
+
+//
+	// Read/write access to registers
+	//
+
+	priv->debug.debugfs_phy_regs = debugfs_create_dir("registers", priv->debug.debugfs_phy);
+	if (!priv->debug.debugfs_phy_regs)
+		return -ENOMEM;
+
+	previnstance = NULL;
+	for (i = 0; i < sizeof(registers) / sizeof(registers[0]); ++i)
+	{
+		struct reg_ops *regops = &registers[i];
+		struct reg_ops_instance *instance;
+
+		// Allocated linked list is freed in ath9k_hw_deinit
+		instance = kzalloc(sizeof(struct reg_ops_instance), GFP_KERNEL);
+		if (!instance) return -ENOMEM;
+
+		instance->regops = regops;
+		instance->owner = priv;
+
+		instance->valueset = 0;
+		instance->value = 0;
+		instance->next = previnstance;
+
+		// Read/write access using general functions
+		debugfs_create_file(regops->name, S_IRUSR|S_IWUSR,
+			priv->debug.debugfs_phy_regs, instance, &fops_reg_ops);
+
+		previnstance = instance;
+	}
+	
+	priv->ah->modified_registers = previnstance;
+		
 
 	return 0;
 }

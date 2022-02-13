@@ -248,6 +248,24 @@ void ath9k_hw_get_channel_centers(struct ath_hw *ah,
 		centers->synth_center + (extoff * HT40_CHANNEL_CENTER_SHIFT);
 }
 
+static void ath9k_restore_registers(struct ath_hw *ah)
+{
+	struct reg_ops_instance *saved_reg = ah->modified_registers;
+	int regval;
+
+	while (saved_reg != NULL)
+	{
+		if (saved_reg->valueset)
+		{
+			regval = REG_READ(ah, saved_reg->regops->address);
+			regval = (regval & ~saved_reg->regops->mask) | saved_reg->value;
+			REG_WRITE(ah, saved_reg->regops->address, regval);
+		}
+
+		saved_reg = saved_reg->next;
+	}
+}
+
 /******************/
 /* Chip Revisions */
 /******************/
@@ -2078,6 +2096,8 @@ int ath9k_hw_reset(struct ath_hw *ah, struct ath9k_channel *chan,
 	if (AR_SREV_9565(ah) && common->bt_ant_diversity)
 		REG_SET_BIT(ah, AR_BTCOEX_WL_LNADIV, AR_BTCOEX_WL_LNADIV_FORCE_ON);
 
+	ath9k_restore_registers(ah);
+
 	if (ah->hw->conf.radar_enabled) {
 		/* set HW specific DFS configuration */
 		ah->radar_conf.ext_channel = IS_CHAN_HT40(chan);
@@ -2225,6 +2245,8 @@ static bool ath9k_hw_set_power_awake(struct ath_hw *ah)
 		ar9003_mci_set_power_awake(ah);
 
 	REG_CLR_BIT(ah, AR_STA_ID1, AR_STA_ID1_PWR_SAV);
+
+	ath9k_restore_registers(ah);
 
 	return true;
 }

@@ -169,6 +169,7 @@ config ATH9K_HTC
        select BPAUTO_LEDS_CLASS
        select BPAUTO_NEW_LEDS
        select ATH9K_COMMON
+	   select ATH9K_HTC_DEBUGFS
        ---help---
 	 Support for Atheros HTC based cards.
 	 Chipsets supported: AR9271
@@ -179,7 +180,7 @@ config ATH9K_HTC
 
 config ATH9K_HTC_DEBUGFS
 	bool "Atheros ath9k_htc debugging"
-	depends on ATH9K_HTC && DEBUG_FS
+	depends on DEBUG_FS
 	select ATH9K_COMMON_DEBUG
 	---help---
 	  Say Y, if you need access to ath9k_htc's statistics.
