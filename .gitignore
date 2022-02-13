@@ -19,3 +19,4 @@ Module.symvers
 *.mod.c
 .cache.mk
 *.tar.gz
+.vscode/settings.json
