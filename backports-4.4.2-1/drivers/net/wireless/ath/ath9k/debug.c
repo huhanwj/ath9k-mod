@@ -149,7 +149,7 @@ static ssize_t read_file_reg_ops(struct file *file, char __user *user_buf,
 				 size_t count, loff_t *ppos)
 {
 	struct reg_ops_instance *instance = file->private_data;
-	struct ath9k_sc *sc = instance->owner;
+	struct ath_softc *sc = instance->owner;
 	struct reg_ops *regops = instance->regops;
 	char buf[512];
 	unsigned int len;
@@ -178,7 +178,7 @@ static ssize_t write_file_reg_ops(struct file *file, const char __user *user_buf
 				  size_t count, loff_t *ppos)
 {
 	struct reg_ops_instance *instance = file->private_data;
-	struct ath9k_sc *sc = instance->owner;
+	struct ath_softc *sc = instance->owner;
 	struct reg_ops *regops = instance->regops;
 	unsigned long val;
 	char buf[32];
