@@ -26,6 +26,26 @@
 #define REG_READ_D(_ah, _reg) \
 	ath9k_hw_common(_ah)->ops->read((_ah), (_reg))
 
+struct reg_ops registers[] = {
+	// Backoff parameters
+	{"ifs_cwmin_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMIN,
+		"Backoff behaviour (queue 0): CW_MIN is the minimum number of time slots to wait."},
+	{"ifs_cwmax_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMAX,
+		"Backoff behaviour (queue 0): CW_MAX is the maximum number of time slots to wait."},
+	{"ifs_aifs_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_AIFS,
+		"AIFS (in number of aSlotTime's) for queue 0."},
+	// Disable backoff
+	{"ifs_ignore_backoff",		AR_D_GBL_IFS_MISC,	AR_D_GBL_IFS_MISC_IGNORE_BACKOFF,
+		"Ignore backoff (perhaps you also want to disable waiting for ACKs - see inject_noack)."},
+	// Virtual and physical carrier sense
+	{"ignore_virt_cs",		AR_DIAG_SW,		AR_DIAG_IGNORE_VIRT_CS,
+		"Disables virtual carrier (cts/rts) sense when set."},
+	{"force_channel_idle",		AR_DIAG_SW,		AR_DIAG_FORCE_CH_IDLE_HIGH,
+		"Disables physical carrier sense (air clear) when set."},
+	{"diag_rx_disable",		AR_DIAG_SW,		AR_DIAG_RX_DIS,
+		"Block incoming frames from being sent to the firmware."},
+};
+
 void ath9k_debug_sync_cause(struct ath_softc *sc, u32 sync_cause)
 {
 	if (sync_cause)
@@ -1393,5 +1413,36 @@ int ath9k_init_debug(struct ath_hw *ah)
 	debugfs_create_file("tpc", S_IRUSR | S_IWUSR,
 			    sc->debug.debugfs_phy, sc, &fops_tpc);
 
+	// imitate modwifi project, write some register change code like this.
+	sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", priv->debug.debugfs_phy);
+	if (!sc->debug.debugfs_phy_regs)
+		return -ENOMEM;
+
+	previnstance = NULL;
+	for (i = 0; i < sizeof(registers) / sizeof(registers[0]); ++i)
+	{
+		struct reg_ops *regops = &registers[i];
+		struct reg_ops_instance *instance;
+
+		// Allocated linked list is freed in ath9k_hw_deinit
+		instance = kzalloc(sizeof(struct reg_ops_instance), GFP_KERNEL);
+		if (!instance) return -ENOMEM;
+
+		instance->regops = regops;
+		instance->owner = sc;
+
+		instance->valueset = 0;
+		instance->value = 0;
+		instance->next = previnstance;
+
+		// Read/write access using general functions
+		debugfs_create_file(regops->name, S_IRUSR|S_IWUSR,
+			sc->debug.debugfs_phy_regs, instance, &fops_reg_ops);
+
+		previnstance = instance;
+	}
+	
+	sc->ah->modified_registers = previnstance;
+	
 	return 0;
 }
