@@ -1,6 +1,6 @@
 # ath9k-mod
 disable CSMA/CA in ath9k
-Bulit on the backport project with kernel version of 5.3-rc4.
+Bulit on the backport project with kernel version of 4.4.2.
 
 ## Main Modification
 * Disable CSMA in ath9k.
@@ -9,7 +9,7 @@ Bulit on the backport project with kernel version of 5.3-rc4.
 
 ##  Installation
 ### System requirement
-Ubuntu (with kernel version <= 5.3)
+Ubuntu 14.04(with kernel version <= 4.4.2)
 
 ### Dependencies
 ```Shell
@@ -19,7 +19,7 @@ sudo apt-get install build-essential bison bc flex libncurses5-dev libncursesw5-
 
 ### Install the backport kernel
 ```Shell
-make defconfig-ath9k
+make defconfig-ath9k-debug
 make -j<n>
 sudo make install -j<n>
 ```
@@ -36,7 +36,7 @@ Execute this:
 ```bash
 test@ubuntu:~$ sudo su
 root@ubuntu:~$ mount -t debugfs none /sys/kernel/debug
-root@ubuntu:~$ cd /sys/kernel/debug/ieee80211/phy*/ath9k_htc/registers/
+root@ubuntu:~$ cd /sys/kernel/debug/ieee80211/phy*/ath9k/registers/
 root@ubuntu:~$ echo 1 > force_channel_idle
 root@ubuntu:~$ echo 1 > ignore_virt_cs
 ```
