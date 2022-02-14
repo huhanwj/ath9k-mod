@@ -145,6 +145,83 @@ static const struct file_operations fops_debug = {
 	.llseek = default_llseek,
 };
 
+static ssize_t read_file_reg_ops(struct file *file, char __user *user_buf,
+				 size_t count, loff_t *ppos)
+{
+	struct reg_ops_instance *instance = file->private_data;
+	struct ath9k_sc *sc = instance->owner;
+	struct reg_ops *regops = instance->regops;
+	char buf[512];
+	unsigned int len;
+	unsigned int regval, mask;
+
+	ath9k_ps_wakeup(sc);
+	regval = REG_READ(sc->sc_ah, regops->address);
+	ath9k_ps_restore(sc);
+
+	// apply mask, and shift according to mask
+	regval &= regops->mask;
+	mask = regops->mask;
+	while ( (mask & 1) == 0) {
+		mask >>= 1;
+		regval >>= 1;
+	}
+
+	len = snprintf(buf, sizeof(buf), "%s: %s\nValue: 0x%08X = %d (forced: %d)\n",
+					regops->name, regops->description, regval, regval,
+					!!(instance->valueset));
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static ssize_t write_file_reg_ops(struct file *file, const char __user *user_buf,
+				  size_t count, loff_t *ppos)
+{
+	struct reg_ops_instance *instance = file->private_data;
+	struct ath9k_sc *sc = instance->owner;
+	struct reg_ops *regops = instance->regops;
+	unsigned long val;
+	char buf[32];
+	ssize_t len;
+	unsigned int mask, regval;
+
+	len = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, user_buf, len))
+		return -EINVAL;
+
+	buf[len] = '\0';
+	if (kstrtoul(buf, 0, &val))
+		return -EINVAL;
+
+	// shift according to mask
+	mask = regops->mask;
+	while ( (mask & 1) == 0) {
+		mask >>= 1;
+		val <<= 1;
+	}
+
+	// apply mask to assure we're not overwriting anything else
+	val &= regops->mask;
+
+	ath9k_ps_wakeup(sc);
+	regval = REG_READ(sc->sc_ah, regops->address);
+	regval = (regval & ~regops->mask) | val;
+	REG_WRITE(sc->sc_ah, regops->address, regval);
+	ath9k_ps_restore(sc);
+
+	instance->valueset = 1;
+	instance->value = val;
+
+	return count;
+}
+
+static const struct file_operations fops_reg_ops = {
+	.read = read_file_reg_ops,
+	.write = write_file_reg_ops,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
 #endif
 
 #define DMA_BUF_LEN 1024
