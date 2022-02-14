@@ -1325,7 +1325,8 @@ int ath9k_init_debug(struct ath_hw *ah)
 {
 	struct ath_common *common = ath9k_hw_common(ah);
 	struct ath_softc *sc = (struct ath_softc *) common->priv;
-
+	struct reg_ops_instance *previnstance;
+	int i;
 	sc->debug.debugfs_phy = debugfs_create_dir("ath9k",
 						   sc->hw->wiphy->debugfsdir);
 	if (!sc->debug.debugfs_phy)
@@ -1414,7 +1415,7 @@ int ath9k_init_debug(struct ath_hw *ah)
 			    sc->debug.debugfs_phy, sc, &fops_tpc);
 
 	// imitate modwifi project, write some register change code like this.
-	sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", priv->debug.debugfs_phy);
+	sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", sc->debug.debugfs_phy);
 	if (!sc->debug.debugfs_phy_regs)
 		return -ENOMEM;
 
@@ -1442,7 +1443,7 @@ int ath9k_init_debug(struct ath_hw *ah)
 		previnstance = instance;
 	}
 	
-	sc->ah->modified_registers = previnstance;
+	sc->sc_ah->modified_registers = previnstance;
 	
 	return 0;
 }

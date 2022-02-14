@@ -971,6 +971,8 @@ struct ath_hw {
 	const struct firmware *eeprom_blob;
 
 	struct ath_dynack dynack;
+	/** Linked list of (possibly) manually overwritten registers */
+	struct reg_ops_instance *modified_registers;
 
 	bool tpc_enabled;
 	u8 tx_power[Ar5416RateSize];
