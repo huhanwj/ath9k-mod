@@ -20,6 +20,7 @@
 #include <asm/unaligned.h>
 
 #include "ath9k.h"
+#include "hw.h"
 
 #define REG_WRITE_D(_ah, _reg, _val) \
 	ath9k_hw_common(_ah)->ops->write((_ah), (_val), (_reg))
