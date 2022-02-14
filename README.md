@@ -4,8 +4,8 @@ Bulit on the backport project with kernel version of 4.4.2.
 
 ## Main Modification
 * Disable CSMA in ath9k.
-* Disable backoff in ath9k.
-* Configure the chip as HCF Poll Gated via register configuration.
+* Disable backoff in ath9k. (In development)
+* Configure the chip as HCF Poll Gated via register configuration. (In development）
 
 ##  Installation
 ### System requirement
