@@ -20,11 +20,32 @@
 #include <asm/unaligned.h>
 
 #include "ath9k.h"
+#include "hw.h"
 
 #define REG_WRITE_D(_ah, _reg, _val) \
 	ath9k_hw_common(_ah)->ops->write((_ah), (_val), (_reg))
 #define REG_READ_D(_ah, _reg) \
 	ath9k_hw_common(_ah)->ops->read((_ah), (_reg))
+
+struct reg_ops registers[] = {
+	// Backoff parameters
+	{"ifs_cwmin_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMIN,
+		"Backoff behaviour (queue 0): CW_MIN is the minimum number of time slots to wait."},
+	{"ifs_cwmax_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_CWMAX,
+		"Backoff behaviour (queue 0): CW_MAX is the maximum number of time slots to wait."},
+	{"ifs_aifs_queue0",		AR_DLCL_IFS(0),		AR_D_LCL_IFS_AIFS,
+		"AIFS (in number of aSlotTime's) for queue 0."},
+	// Disable backoff
+	{"ifs_ignore_backoff",		AR_D_GBL_IFS_MISC,	AR_D_GBL_IFS_MISC_IGNORE_BACKOFF,
+		"Ignore backoff (perhaps you also want to disable waiting for ACKs - see inject_noack)."},
+	// Virtual and physical carrier sense
+	{"ignore_virt_cs",		AR_DIAG_SW,		AR_DIAG_IGNORE_VIRT_CS,
+		"Disables virtual carrier (cts/rts) sense when set."},
+	{"force_channel_idle",		AR_DIAG_SW,		AR_DIAG_FORCE_CH_IDLE_HIGH,
+		"Disables physical carrier sense (air clear) when set."},
+	{"diag_rx_disable",		AR_DIAG_SW,		AR_DIAG_RX_DIS,
+		"Block incoming frames from being sent to the firmware."},
+};
 
 void ath9k_debug_sync_cause(struct ath_softc *sc, u32 sync_cause)
 {
@@ -124,6 +145,83 @@ static const struct file_operations fops_debug = {
 	.llseek = default_llseek,
 };
 
+static ssize_t read_file_reg_ops(struct file *file, char __user *user_buf,
+				 size_t count, loff_t *ppos)
+{
+	struct reg_ops_instance *instance = file->private_data;
+	struct ath_softc *sc = instance->owner;
+	struct reg_ops *regops = instance->regops;
+	char buf[512];
+	unsigned int len;
+	unsigned int regval, mask;
+
+	ath9k_ps_wakeup(sc);
+	regval = REG_READ(sc->sc_ah, regops->address);
+	ath9k_ps_restore(sc);
+
+	// apply mask, and shift according to mask
+	regval &= regops->mask;
+	mask = regops->mask;
+	while ( (mask & 1) == 0) {
+		mask >>= 1;
+		regval >>= 1;
+	}
+
+	len = snprintf(buf, sizeof(buf), "%s: %s\nValue: 0x%08X = %d (forced: %d)\n",
+					regops->name, regops->description, regval, regval,
+					!!(instance->valueset));
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static ssize_t write_file_reg_ops(struct file *file, const char __user *user_buf,
+				  size_t count, loff_t *ppos)
+{
+	struct reg_ops_instance *instance = file->private_data;
+	struct ath_softc *sc = instance->owner;
+	struct reg_ops *regops = instance->regops;
+	unsigned long val;
+	char buf[32];
+	ssize_t len;
+	unsigned int mask, regval;
+
+	len = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, user_buf, len))
+		return -EINVAL;
+
+	buf[len] = '\0';
+	if (kstrtoul(buf, 0, &val))
+		return -EINVAL;
+
+	// shift according to mask
+	mask = regops->mask;
+	while ( (mask & 1) == 0) {
+		mask >>= 1;
+		val <<= 1;
+	}
+
+	// apply mask to assure we're not overwriting anything else
+	val &= regops->mask;
+
+	ath9k_ps_wakeup(sc);
+	regval = REG_READ(sc->sc_ah, regops->address);
+	regval = (regval & ~regops->mask) | val;
+	REG_WRITE(sc->sc_ah, regops->address, regval);
+	ath9k_ps_restore(sc);
+
+	instance->valueset = 1;
+	instance->value = val;
+
+	return count;
+}
+
+static const struct file_operations fops_reg_ops = {
+	.read = read_file_reg_ops,
+	.write = write_file_reg_ops,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
 #endif
 
 #define DMA_BUF_LEN 1024
@@ -1445,6 +1543,35 @@ int ath9k_init_debug(struct ath_hw *ah)
 
 	debugfs_create_file("nf_override", 0600,
 			    sc->debug.debugfs_phy, sc, &fops_nf_override);
+					sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", sc->debug.debugfs_phy);
+	if (!sc->debug.debugfs_phy_regs)
+		return -ENOMEM;
+
+	previnstance = NULL;
+	for (i = 0; i < sizeof(registers) / sizeof(registers[0]); ++i)
+	{
+		struct reg_ops *regops = &registers[i];
+		struct reg_ops_instance *instance;
+
+		// Allocated linked list is freed in ath9k_hw_deinit
+		instance = kzalloc(sizeof(struct reg_ops_instance), GFP_KERNEL);
+		if (!instance) return -ENOMEM;
+
+		instance->regops = regops;
+		instance->owner = sc;
+
+		instance->valueset = 0;
+		instance->value = 0;
+		instance->next = previnstance;
+
+		// Read/write access using general functions
+		debugfs_create_file(regops->name, 0600,
+			sc->debug.debugfs_phy_regs, instance, &fops_reg_ops);
+
+		previnstance = instance;
+	}
+	
+	sc->sc_ah->modified_registers = previnstance;
 
 	return 0;
 }
