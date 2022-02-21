@@ -1463,6 +1463,8 @@ int ath9k_init_debug(struct ath_hw *ah)
 {
 	struct ath_common *common = ath9k_hw_common(ah);
 	struct ath_softc *sc = (struct ath_softc *) common->priv;
+	struct reg_ops_instance *previnstance;
+	int i;
 
 	sc->debug.debugfs_phy = debugfs_create_dir("ath9k",
 						   sc->hw->wiphy->debugfsdir);
@@ -1543,7 +1545,7 @@ int ath9k_init_debug(struct ath_hw *ah)
 
 	debugfs_create_file("nf_override", 0600,
 			    sc->debug.debugfs_phy, sc, &fops_nf_override);
-					sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", sc->debug.debugfs_phy);
+	sc->debug.debugfs_phy_regs = debugfs_create_dir("registers", sc->debug.debugfs_phy);
 	if (!sc->debug.debugfs_phy_regs)
 		return -ENOMEM;
 
